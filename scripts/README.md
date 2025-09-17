@@ -85,6 +85,15 @@ Visualization is enabled by `--visualize`, which shows the plan with the PyBulle
 
 # Other Scripts
 
+## Wasm32 smoke test
+If you have [Emscripten](https://emscripten.org) installed and activated (emcc/em++ in PATH), you can build a minimal wasm32 SIMD smoke module and run a quick Node test:
+
+1) Configure a separate build directory using Emscripten's toolchain (e.g., `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`).
+2) Build the `vamp_wasm_smoke` target: `cmake --build build-wasm -j`.
+3) Run the Node test: `node scripts/wasm_smoke.js`.
+
+This produces `build-wasm/vamp_smoke.mjs` and exercises the Wasm SIMD paths in the collision and vector code.
+
 ## `visualize_ompl.py`
 If you have the [OMPL](https://ompl.kavrakilab.org/) Python Bindings installed (we recommend using the [pre-built wheels](https://github.com/ompl/ompl/releases/tag/prerelease)) you can also test problems against OMPL using PyBullet's collision checking with this script.
 
