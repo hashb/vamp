@@ -1,7 +1,10 @@
 #pragma once
 
-extern "C"
-{
+#if !defined(__x86_64__)
+#error "XORShift is only supported on x86_64 (AVX)."
+#endif
+
+extern "C" {
 #include <simdxorshift128plus.h>
 }
 
