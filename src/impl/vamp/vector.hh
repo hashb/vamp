@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <vamp/vector/interface.hh>
 
-#if defined(__x86_64__)
+#if defined(__EMSCRIPTEN__) && defined(__wasm_simd128__)
+#include <vamp/vector/wasm.hh>
+#elif defined(__x86_64__)
 #include <vamp/vector/avx.hh>
 #elif defined(__ARM_NEON) || defined(__ARM_NEON__)
 #include <vamp/vector/neon.hh>
@@ -11,7 +13,11 @@
 
 namespace vamp
 {
-#if defined(__x86_64__)
+#if defined(__EMSCRIPTEN__) && defined(__wasm_simd128__)
+    using FloatT = float;
+    using SimdFloatT = wasm_f32x4;
+    using SimdIntT = wasm_i32x4;
+#elif defined(__x86_64__)
     using FloatT = float;
     using SimdFloatT = __m256;
     using SimdIntT = __m256i;

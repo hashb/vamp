@@ -52,6 +52,14 @@ include(CompilerSettings)
 include(FetchInitCPM)
 include(Dependencies)
 
+# Emscripten + Wasm SIMD configuration
+if(EMSCRIPTEN)
+  add_compile_options(-msimd128 -mrelaxed-simd)
+  add_link_options(-msimd128 -mrelaxed-simd)
+  # Disable Python bindings for wasm builds
+  set(VAMP_BUILD_PYTHON_BINDINGS OFF CACHE BOOL "" FORCE)
+endif()
+
 # Create VAMP C++ library
 add_library(vamp_cpp INTERFACE)
 
