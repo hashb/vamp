@@ -58,6 +58,22 @@ if(EMSCRIPTEN)
   add_link_options(-msimd128 -mrelaxed-simd)
   # Disable Python bindings for wasm builds
   set(VAMP_BUILD_PYTHON_BINDINGS OFF CACHE BOOL "" FORCE)
+  # Build a minimal wasm smoke test module as an ES module for Node/browser
+  add_executable(vamp_wasm_smoke src/impl/vamp/bindings/wasm_smoke.cc)
+  # Emscripten flags: ES module, no filesystem, export smoke and cwrap for script
+  target_link_options(vamp_wasm_smoke PRIVATE
+    "SHELL:-s EXPORTED_FUNCTIONS=['_vamp_wasm_smoke']"
+    "SHELL:-s EXPORTED_RUNTIME_METHODS=['cwrap']"
+    "SHELL:-s MODULARIZE=1"
+    "SHELL:-s EXPORT_ES6=1"
+    "SHELL:-s ENVIRONMENT=web,worker,node"
+    "SHELL:-s INITIAL_MEMORY=67108864"
+    "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    "SHELL:-s FILESYSTEM=0"
+    -O3
+  )
+  target_link_libraries(vamp_wasm_smoke PRIVATE vamp_cpp)
+  set_target_properties(vamp_wasm_smoke PROPERTIES OUTPUT_NAME vamp_smoke SUFFIX ".mjs")
 endif()
 
 # Create VAMP C++ library
