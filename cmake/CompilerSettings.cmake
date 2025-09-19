@@ -1,4 +1,7 @@
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+if(EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
+    # Emscripten/wasm32: don't use native arch flags; top-level adds -msimd128/-mrelaxed-simd
+    set(VAMP_ARCH "")
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 	# Need explicit AVX2 for some MacOS clang versions
 	set(VAMP_ARCH "-march=native -mavx2")
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
@@ -15,7 +18,7 @@ endif()
 # default fast args that work on all platforms
 set(VAMP_FAST_ARGS "-fno-math-errno -fno-signed-zeros -fno-trapping-math -fno-rounding-math -ffp-contract=fast")
 
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64") # x86 supports additional flags
+if(NOT (EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32") AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64") # x86 supports additional flags
 	string(APPEND VAMP_FAST_ARGS " -fassociative-math")
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang") # Clang supports additional fine-grained flags over GCC
 		string(APPEND VAMP_FAST_ARGS " -fno-honor-infinities -fno-honor-nans")
@@ -37,13 +40,13 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -g")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3 ${VAMP_FAST_ARGS}")
 
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+if(NOT (EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32") AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 	# Valgrind can't handle avx512 instructions
 	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -mno-avx512f")
 	set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -mno-avx512f")
 endif()
 
-if(VAMP_LTO)
+if(VAMP_LTO AND NOT (EMSCRIPTEN OR CMAKE_SYSTEM_NAME STREQUAL "Emscripten" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32"))
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
 		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -flto")
