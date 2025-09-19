@@ -1,3 +1,6 @@
+#include <cstdlib>
+#include <cstdint>
+
 #include <emscripten/emscripten.h>
 
 #include <vector>
@@ -12,6 +15,8 @@
 #include <vamp/planning/simplify.hh>
 #include <vamp/robots/panda.hh>
 #include <vamp/random/halton.hh>
+
+extern "C" {
 
 using Robot = vamp::robots::Panda;
 static constexpr const std::size_t rake = vamp::FloatVectorWidth;
@@ -45,27 +50,42 @@ static const std::vector<std::array<float, 3>> problem = {
 static constexpr float radius = 0.2;
 
 EMSCRIPTEN_KEEPALIVE
-float vamp_wasm_smoke()
+float vamp_wasm_planning()
 {
+
+    std::cout << "Running WASM planning test" << std::endl;
+
     // Build sphere cage environment
     EnvironmentInput environment;
-    for (const auto &sphere : problem)
-    {
-        environment.spheres.emplace_back(vamp::collision::factory::sphere::array(sphere, radius));
-    }
+    // for (const auto &sphere : problem)
+    // {
+    //     environment.spheres.emplace_back(vamp::collision::factory::sphere::array(sphere, radius));
+    // }
+
+    std::cout << "Environment built" << std::endl;
 
     environment.sort();
     auto env_v = EnvironmentVector(environment);
 
+    std::cout << "Environment vector built" << std::endl;
+
     // Create RNG for planning
     auto rng = std::make_shared<vamp::rng::Halton<Robot>>();
 
+
+    std::cout << "RNG built" << std::endl;
     // Setup RRTC and plan
     vamp::planning::RRTCSettings rrtc_settings;
     rrtc_settings.range = 1.0;
 
     auto result =
         RRTC::solve(Robot::Configuration(start), Robot::Configuration(goal), env_v, rrtc_settings, rng);
+
+    std::cout << "RRTC solved" << std::endl;
+    std::cout << "result.nanoseconds: " << result.nanoseconds << std::endl;
+    std::cout << "result.iterations: " << result.iterations << std::endl;
+    std::cout << "result.size: " << result.size[0] << ", " << result.size[1] << std::endl;
+    std::cout << "result.path.size: " << result.path.size() << std::endl;
 
     // If successful
     if (result.path.size() > 0)
@@ -91,3 +111,5 @@ float vamp_wasm_smoke()
 
     return 0;
 }
+
+} // extern "C"

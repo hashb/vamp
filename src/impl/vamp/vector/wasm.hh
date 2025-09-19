@@ -24,6 +24,11 @@ namespace vamp
         v128_t v;
     };
 
+    inline constexpr auto operator+(wasm_f32x4 l, wasm_f32x4 r) noexcept -> wasm_f32x4
+    {
+        return wasm_f32x4{wasm_f32x4_add(l.v, r.v)};
+    }
+
     template <>
     struct SIMDVector<wasm_i32x4>
     {

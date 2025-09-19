@@ -27,6 +27,8 @@ if(VAMP_FORCE_COLORED_OUTPUT)
   endif()
 endif()
 
+add_definitions(-w)
+
 project(
     vamp
     VERSION 0.2
