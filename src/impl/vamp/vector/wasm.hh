@@ -98,6 +98,12 @@ namespace vamp
         }
 
         template <unsigned int = 0>
+        inline static constexpr auto cmp_not_equal(VectorT l, VectorT r) noexcept -> VectorT
+        {
+            return VectorT{wasm_v128_not(wasm_i32x4_eq(l.v, r.v))};
+        }
+
+        template <unsigned int = 0>
         inline static constexpr auto cmp_greater_than(VectorT l, VectorT r) noexcept -> VectorT
         {
             return VectorT{wasm_i32x4_gt(l.v, r.v)};
@@ -138,6 +144,12 @@ namespace vamp
         inline static auto mask(VectorT v) noexcept -> unsigned int
         {
             return wasm_i32x4_bitmask(v.v);
+        }
+
+        template <unsigned int = 0>
+        inline static constexpr auto blend(VectorT a, VectorT b, VectorT blend_mask) noexcept -> VectorT
+        {
+            return VectorT{wasm_v128_bitselect(b.v, a.v, blend_mask.v)};
         }
 
         template <unsigned int = 0>
@@ -544,6 +556,94 @@ namespace vamp
 
             x = or_(x, invalid_mask);  // negative arg will be NAN
             return x;
+        }
+
+        // Port of AVX/NEON sin implementation
+        template <unsigned int = 0>
+        inline static constexpr auto sin(VectorT x) noexcept -> VectorT
+        {
+            using IntVector = SIMDVector<wasm_i32x4>;
+
+            const auto ps_sign_mask = constant_int(0x80000000);
+            const auto ps_cephes_FOPI = constant(1.27323954473516f);  // 4/Pi
+            const auto pi32_1 = IntVector::constant(1);
+            const auto pi32_inv1 = IntVector::constant(~1);
+            const auto pi32_4 = IntVector::constant(4);
+            const auto pi32_2 = IntVector::constant(2);
+            const auto ps_minus_cephes_DP1 = constant(-0.78515625f);
+            const auto ps_minus_cephes_DP2 = constant(-2.4187564849853515625e-4f);
+            const auto ps_minus_cephes_DP3 = constant(-3.77489497744594108e-8f);
+            const auto ps_coscof_p0 = constant(2.443315711809948E-005f);
+            const auto ps_coscof_p1 = constant(-1.388731625493765E-003f);
+            const auto ps_coscof_p2 = constant(4.166664568298827E-002f);
+            const auto ps_0p5 = constant(0.5f);
+            const auto ps_1 = constant(1.0f);
+            const auto ps_sincof_p0 = constant(-1.9515295891E-4f);
+            const auto ps_sincof_p1 = constant(8.3321608736E-3f);
+            const auto ps_sincof_p2 = constant(-1.6666654611E-1f);
+
+            auto sign_bit = x;
+            x = abs(x);
+            sign_bit = and_(sign_bit, ps_sign_mask);
+            auto y = mul(x, ps_cephes_FOPI);
+
+            auto emm2 = IntVector::from(y);
+
+            // j=(j+1) & (~1)
+            emm2 = IntVector::add(emm2, pi32_1);
+            emm2 = IntVector::and_(emm2, pi32_inv1);
+            y = from<typename IntVector::VectorT>(emm2);
+
+            // Get the swap sign flag
+            auto emm0 = IntVector::and_(emm2, pi32_4);
+            emm0 = IntVector::shift_left(emm0, 29);
+
+            // Get the polynom selection mask
+            auto emm2_and2 = IntVector::and_(emm2, pi32_2);
+            auto emm2_is_zero = IntVector::cmp_equal(emm2_and2, IntVector::zero_vector());
+            auto swap_sign_bit = IntVector::template as<VectorT>(emm0);
+            auto poly_mask = IntVector::template as<VectorT>(emm2_is_zero);
+            sign_bit = VectorT{wasm_v128_xor(sign_bit.v, swap_sign_bit.v)};
+
+            // The magic pass: Extended precision modular arithmetic
+            auto xmm1 = mul(y, ps_minus_cephes_DP1);
+            auto xmm2f = mul(y, ps_minus_cephes_DP2);
+            auto xmm3 = mul(y, ps_minus_cephes_DP3);
+            x = add(x, xmm1);
+            x = add(x, xmm2f);
+            x = add(x, xmm3);
+
+            // Evaluate the first polynom (cosine)
+            auto z = mul(x, x);
+            auto y_cos = ps_coscof_p0;
+            y_cos = mul(y_cos, z);
+            y_cos = add(y_cos, ps_coscof_p1);
+            y_cos = mul(y_cos, z);
+            y_cos = add(y_cos, ps_coscof_p2);
+            y_cos = mul(y_cos, z);
+            y_cos = mul(y_cos, z);
+            auto tmp = mul(z, ps_0p5);
+            y_cos = sub(y_cos, tmp);
+            y_cos = add(y_cos, ps_1);
+
+            // Evaluate the second polynom (sine)
+            auto y_sin = ps_sincof_p0;
+            y_sin = mul(y_sin, z);
+            y_sin = add(y_sin, ps_sincof_p1);
+            y_sin = mul(y_sin, z);
+            y_sin = add(y_sin, ps_sincof_p2);
+            y_sin = mul(y_sin, z);
+            y_sin = mul(y_sin, x);
+            y_sin = add(y_sin, x);
+
+            // Select the correct result from the two polynoms
+            auto y2_sel = and_(poly_mask, y_sin);
+            auto y1_sel = VectorT{wasm_v128_and(wasm_v128_not(poly_mask.v), y_cos.v)};
+            auto y_final = add(y1_sel, y2_sel);
+
+            // Update the sign
+            y_final = VectorT{wasm_v128_xor(y_final.v, sign_bit.v)};
+            return y_final;
         }
 
         template <unsigned int = 0>
