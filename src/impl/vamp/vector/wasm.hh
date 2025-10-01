@@ -24,11 +24,6 @@ namespace vamp
         v128_t v;
     };
 
-    inline constexpr auto operator+(wasm_f32x4 l, wasm_f32x4 r) noexcept -> wasm_f32x4
-    {
-        return wasm_f32x4{wasm_f32x4_add(l.v, r.v)};
-    }
-
     template <>
     struct SIMDVector<wasm_i32x4>
     {
@@ -468,6 +463,13 @@ namespace vamp
         }
 
         template <unsigned int = 0>
+        inline static constexpr auto rsqrt(VectorT v) noexcept -> VectorT
+        {
+            // No native rsqrt; compute 1/sqrt(v)
+            return VectorT{wasm_f32x4_div(wasm_f32x4_splat(1.0f), wasm_f32x4_sqrt(v.v))};
+        }
+
+        template <unsigned int = 0>
         inline static constexpr auto shift_left(VectorT v, unsigned int i) noexcept -> VectorT
         {
             v128_t vi = wasm_i32x4_shl(v.v, static_cast<int>(i));
@@ -491,6 +493,12 @@ namespace vamp
         inline static constexpr auto max(VectorT v, VectorT other) noexcept -> VectorT
         {
             return VectorT{wasm_f32x4_max(v.v, other.v)};
+        }
+
+        template <unsigned int = 0>
+        inline static constexpr auto min(VectorT v, VectorT other) noexcept -> VectorT
+        {
+            return VectorT{wasm_f32x4_min(v.v, other.v)};
         }
 
         template <unsigned int = 0>
