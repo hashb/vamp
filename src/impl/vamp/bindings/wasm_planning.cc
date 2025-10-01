@@ -57,10 +57,10 @@ float vamp_wasm_planning()
 
     // Build sphere cage environment
     EnvironmentInput environment;
-    // for (const auto &sphere : problem)
-    // {
-    //     environment.spheres.emplace_back(vamp::collision::factory::sphere::array(sphere, radius));
-    // }
+    for (const auto &sphere : problem)
+    {
+        environment.spheres.emplace_back(vamp::collision::factory::sphere::array(sphere, radius));
+    }
 
     std::cout << "Environment built" << std::endl;
 
