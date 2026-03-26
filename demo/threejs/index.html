@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VAMP - WebAssembly Motion Planning Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: system-ui, sans-serif; overflow: hidden; }
+  #info {
+    position: absolute; top: 16px; left: 16px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 16px 20px; border-radius: 8px;
+    max-width: 340px; font-size: 14px; line-height: 1.5;
+  }
+  #info h1 { font-size: 18px; margin-bottom: 8px; color: #60a5fa; }
+  #info p { margin-bottom: 6px; }
+  #status {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 10; background: rgba(0,0,0,0.7); padding: 10px 24px;
+    border-radius: 8px; font-size: 14px; text-align: center;
+  }
+  #controls {
+    position: absolute; top: 16px; right: 16px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 16px 20px; border-radius: 8px;
+    font-size: 14px;
+  }
+  #controls button {
+    display: block; width: 100%; padding: 8px 16px; margin: 4px 0;
+    background: #2563eb; color: white; border: none; border-radius: 4px;
+    cursor: pointer; font-size: 14px;
+  }
+  #controls button:hover { background: #3b82f6; }
+  #controls button:disabled { background: #555; cursor: not-allowed; }
+  #controls label { display: block; margin-top: 8px; }
+  #controls input[type=range] { width: 100%; margin-top: 4px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="info">
+  <h1>VAMP WebAssembly Demo</h1>
+  <p>Panda 7-DOF robot arm motion planning using SIMD-accelerated RRTC in WebAssembly.</p>
+  <p>Obstacles shown as red spheres. Robot collision model shown as blue/green spheres.</p>
+</div>
+
+<div id="controls">
+  <button id="btn-plan" disabled>Plan Path</button>
+  <button id="btn-play" disabled>Play Animation</button>
+  <button id="btn-reset" disabled>Reset</button>
+  <label>Speed
+    <input id="speed" type="range" min="0.1" max="5" step="0.1" value="1" />
+  </label>
+</div>
+
+<div id="status">Loading WASM module...</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---- Three.js scene setup ----
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+scene.fog = new THREE.Fog(0x1a1a2e, 8, 20);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(1.5, 1.5, 2.0);
+camera.lookAt(0, 0.4, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.4, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.1;
+
+// Lights
+const ambientLight = new THREE.AmbientLight(0x404060, 1.5);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+dirLight.position.set(3, 5, 3);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.5);
+fillLight.position.set(-2, 2, -1);
+scene.add(fillLight);
+
+// Ground plane
+const groundGeo = new THREE.PlaneGeometry(6, 6);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x222244, roughness: 0.9 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid helper
+const grid = new THREE.GridHelper(4, 20, 0x333366, 0x333366);
+grid.position.y = 0.001;
+scene.add(grid);
+
+// Axis helper
+const axes = new THREE.AxesHelper(0.3);
+scene.add(axes);
+
+// ---- Materials ----
+const robotMat = new THREE.MeshStandardMaterial({
+  color: 0x4488ff, roughness: 0.3, metalness: 0.6, transparent: true, opacity: 0.85
+});
+const robotGhostMat = new THREE.MeshStandardMaterial({
+  color: 0x44ff88, roughness: 0.4, metalness: 0.3, transparent: true, opacity: 0.15
+});
+const obstacleMat = new THREE.MeshStandardMaterial({
+  color: 0xff4444, roughness: 0.4, metalness: 0.2, transparent: true, opacity: 0.5
+});
+const pathMat = new THREE.LineBasicMaterial({ color: 0xffff44, linewidth: 2 });
+
+// ---- Robot sphere meshes ----
+const ROBOT_SPHERES = 59;
+const sphereGeo = new THREE.SphereGeometry(1, 12, 8);
+const robotMeshes = [];
+for (let i = 0; i < ROBOT_SPHERES; i++) {
+  const m = new THREE.Mesh(sphereGeo, robotMat);
+  m.castShadow = true;
+  scene.add(m);
+  robotMeshes.push(m);
+}
+
+// Ghost meshes for start/goal
+const startGhosts = [];
+const goalGhosts = [];
+for (let i = 0; i < ROBOT_SPHERES; i++) {
+  const sm = new THREE.Mesh(sphereGeo, robotGhostMat.clone());
+  sm.material.color.set(0x44ff88);
+  sm.material.opacity = 0.2;
+  scene.add(sm);
+  startGhosts.push(sm);
+
+  const gm = new THREE.Mesh(sphereGeo, robotGhostMat.clone());
+  gm.material.color.set(0xff8844);
+  gm.material.opacity = 0.2;
+  scene.add(gm);
+  goalGhosts.push(gm);
+}
+
+// Obstacle meshes (created after WASM loads)
+const obstacleMeshes = [];
+
+// Path line
+let pathLine = null;
+
+// ---- WASM module loading ----
+const statusEl = document.getElementById('status');
+const btnPlan = document.getElementById('btn-plan');
+const btnPlay = document.getElementById('btn-play');
+const btnReset = document.getElementById('btn-reset');
+const speedSlider = document.getElementById('speed');
+
+let wasmModule = null;
+let wasmFns = {};
+
+// Path data
+let pathConfigs = [];  // array of Float32Array(7)
+let pathLength = 0;
+let animFrame = 0;
+let animating = false;
+let animTime = 0;
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+async function loadWasm() {
+  try {
+    setStatus('Loading WASM module...');
+    const mod = await import('../../build-wasm/vamp_planning.mjs');
+    wasmModule = await mod.default();
+
+    wasmFns.plan = wasmModule.cwrap('vamp_plan', 'number', []);
+    wasmFns.getPathData = wasmModule.cwrap('vamp_get_path_data', 'number', []);
+    wasmFns.getPathDof = wasmModule.cwrap('vamp_get_path_dof', 'number', []);
+    wasmFns.computeFk = wasmModule.cwrap('vamp_compute_fk', 'number',
+      ['number', 'number', 'number', 'number', 'number', 'number', 'number']);
+    wasmFns.getObstacles = wasmModule.cwrap('vamp_get_obstacles', 'number', []);
+    wasmFns.getObstacleCount = wasmModule.cwrap('vamp_get_obstacle_count', 'number', []);
+    wasmFns.getRobotSphereCount = wasmModule.cwrap('vamp_get_robot_sphere_count', 'number', []);
+
+    setupObstacles();
+    showConfig([0, -0.785, 0, -2.356, 0, 1.571, 0.785]); // start config
+    showGhosts();
+
+    btnPlan.disabled = false;
+    btnReset.disabled = false;
+    setStatus('Ready. Click "Plan Path" to run RRTC planning.');
+  } catch (e) {
+    setStatus('Failed to load WASM: ' + e.message + '. Build with: emcmake cmake -S . -B build-wasm && cmake --build build-wasm -j');
+    console.error(e);
+  }
+}
+
+function setupObstacles() {
+  const count = wasmFns.getObstacleCount();
+  const ptr = wasmFns.getObstacles();
+  const data = new Float32Array(wasmModule.HEAPF32.buffer, ptr, count * 4);
+
+  for (let i = 0; i < count; i++) {
+    const x = data[i * 4 + 0];
+    const y = data[i * 4 + 1];
+    const z = data[i * 4 + 2];
+    const r = data[i * 4 + 3];
+    const mesh = new THREE.Mesh(sphereGeo, obstacleMat);
+    mesh.position.set(x, z, -y);  // VAMP uses Z-up, Three.js uses Y-up
+    mesh.scale.setScalar(r);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    obstacleMeshes.push(mesh);
+  }
+}
+
+function readFkSpheres(config) {
+  const ptr = wasmFns.computeFk(config[0], config[1], config[2], config[3], config[4], config[5], config[6]);
+  const nSpheres = wasmFns.getRobotSphereCount();
+  return new Float32Array(wasmModule.HEAPF32.buffer, ptr, nSpheres * 4);
+}
+
+function showConfig(config) {
+  const data = readFkSpheres(config);
+  for (let i = 0; i < ROBOT_SPHERES; i++) {
+    const x = data[i * 4 + 0];
+    const y = data[i * 4 + 1];
+    const z = data[i * 4 + 2];
+    const r = data[i * 4 + 3];
+    robotMeshes[i].position.set(x, z, -y);
+    robotMeshes[i].scale.setScalar(r);
+  }
+}
+
+function showGhosts() {
+  // Start ghost
+  const startCfg = [0, -0.785, 0, -2.356, 0, 1.571, 0.785];
+  const startData = readFkSpheres(startCfg);
+  for (let i = 0; i < ROBOT_SPHERES; i++) {
+    startGhosts[i].position.set(startData[i*4], startData[i*4+2], -startData[i*4+1]);
+    startGhosts[i].scale.setScalar(startData[i*4+3]);
+  }
+
+  // Goal ghost
+  const goalCfg = [2.35, 1.0, 0, -0.8, 0, 2.5, 0.785];
+  const goalData = readFkSpheres(goalCfg);
+  for (let i = 0; i < ROBOT_SPHERES; i++) {
+    goalGhosts[i].position.set(goalData[i*4], goalData[i*4+2], -goalData[i*4+1]);
+    goalGhosts[i].scale.setScalar(goalData[i*4+3]);
+  }
+}
+
+function buildPathLine() {
+  if (pathLine) { scene.remove(pathLine); pathLine.geometry.dispose(); }
+  if (pathConfigs.length < 2) return;
+
+  // Use end-effector position (last few spheres) to trace path
+  const points = [];
+  for (const config of pathConfigs) {
+    const data = readFkSpheres(config);
+    // Use sphere 0 (base-ish) and last sphere for EE trace
+    const eeIdx = ROBOT_SPHERES - 1;
+    const x = data[eeIdx * 4 + 0];
+    const y = data[eeIdx * 4 + 1];
+    const z = data[eeIdx * 4 + 2];
+    points.push(new THREE.Vector3(x, z, -y));
+  }
+
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  pathLine = new THREE.Line(geo, pathMat);
+  scene.add(pathLine);
+}
+
+// ---- Event handlers ----
+btnPlan.addEventListener('click', () => {
+  btnPlan.disabled = true;
+  btnPlay.disabled = true;
+  setStatus('Planning with RRTC...');
+
+  // Use setTimeout to let the UI update
+  setTimeout(() => {
+    try {
+      const t0 = performance.now();
+      pathLength = wasmFns.plan();
+      const elapsed = (performance.now() - t0).toFixed(1);
+
+      if (pathLength === 0) {
+        setStatus('Planning failed - no path found. Try again.');
+        btnPlan.disabled = false;
+        return;
+      }
+
+      const dof = wasmFns.getPathDof();
+      const ptr = wasmFns.getPathData();
+      const raw = new Float32Array(wasmModule.HEAPF32.buffer, ptr, pathLength * dof);
+
+      pathConfigs = [];
+      for (let i = 0; i < pathLength; i++) {
+        pathConfigs.push(Array.from(raw.slice(i * dof, (i + 1) * dof)));
+      }
+
+      buildPathLine();
+      showConfig(pathConfigs[0]);
+
+      setStatus(`Path found: ${pathLength} waypoints in ${elapsed}ms. Click "Play Animation".`);
+      btnPlan.disabled = false;
+      btnPlay.disabled = false;
+    } catch (e) {
+      setStatus('Planning error: ' + e.message);
+      btnPlan.disabled = false;
+      console.error(e);
+    }
+  }, 50);
+});
+
+btnPlay.addEventListener('click', () => {
+  if (pathConfigs.length === 0) return;
+  animating = !animating;
+  btnPlay.textContent = animating ? 'Pause' : 'Play Animation';
+  if (animating) {
+    animTime = 0;
+    setStatus('Animating path...');
+  }
+});
+
+btnReset.addEventListener('click', () => {
+  animating = false;
+  animTime = 0;
+  animFrame = 0;
+  btnPlay.textContent = 'Play Animation';
+  pathConfigs = [];
+  if (pathLine) { scene.remove(pathLine); pathLine.geometry.dispose(); pathLine = null; }
+  showConfig([0, -0.785, 0, -2.356, 0, 1.571, 0.785]);
+  setStatus('Reset. Click "Plan Path" to plan again.');
+});
+
+// ---- Animation loop ----
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  controls.update();
+
+  if (animating && pathConfigs.length > 1) {
+    const speed = parseFloat(speedSlider.value);
+    animTime += dt * speed;
+
+    // Ping-pong: go forward then backward
+    const totalDuration = pathConfigs.length - 1;
+    const cycleTime = animTime % (totalDuration * 2);
+    let t;
+    if (cycleTime <= totalDuration) {
+      t = cycleTime;
+    } else {
+      t = totalDuration * 2 - cycleTime;
+    }
+
+    const idx = Math.min(Math.floor(t), pathConfigs.length - 2);
+    const frac = t - idx;
+
+    // Interpolate between two adjacent configs
+    const c0 = pathConfigs[idx];
+    const c1 = pathConfigs[idx + 1];
+    const config = c0.map((v, j) => v + frac * (c1[j] - v));
+
+    showConfig(config);
+    const progress = ((t / totalDuration) * 100).toFixed(0);
+    setStatus(`Animating: ${progress}%`);
+  }
+
+  renderer.render(scene, camera);
+}
+
+// Handle resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Start
+loadWasm();
+animate();
+</script>
+</body>
+</html>

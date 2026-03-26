@@ -167,31 +167,28 @@ Requirements:
 - Emscripten SDK installed and activated
 - Node.js for running the smoke test
 
-Build and run a minimal smoke test:
+Build and run:
 ```bash
 # Configure with Emscripten toolchain
 emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release -DVAMP_BUILD_PYTHON_BINDINGS=OFF
 
-# Build headers-only deps and generate compile_commands.json, etc.
+# Build all WASM targets (smoke test, planning, Three.js demo)
 cmake --build build-wasm -j
-
-# Link the Wasm smoke test (Node environment)
-em++ -O3 -msimd128 -mrelaxed-simd \
-  -s WASM=1 -s MODULARIZE=1 -s ENVIRONMENT=node \
-  -s EXPORTED_FUNCTIONS='["_vamp_wasm_smoke"]' \
-  -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap"]' \
-  -I src/impl \
-  -o build-wasm/vamp_smoke.mjs \
-  src/impl/vamp/bindings/wasm_smoke.cc
 
 # Run the Node smoke test
 node scripts/wasm_smoke.js
-# Expected output: OK 17.000000
+# Expected output: OK 16.000000
+
+# Run the planning test
+node scripts/wasm_planning.js
+
+# Open the Three.js demo (serve from repo root)
+# npx serve . and open demo/threejs/index.html
 ```
 
 Notes:
-- Wasm SIMD is required (`-msimd128 -mrelaxed-simd`).
-- The Wasm build uses the native `<wasm_simd128.h>` backend and selects it automatically under Emscripten.
+- Wasm SIMD is required; the build automatically enables `-msimd128 -mrelaxed-simd`.
+- The Wasm build uses the native `<wasm_simd128.h>` backend, selected automatically under Emscripten.
 
 ### Using Clang instead of GCC
 You can force the use of Clang instead of GCC for compiling VAMP by uncommenting the line at the bottom of the `pyproject.toml` (or setting the corresponding CMake variable for C++ builds):
