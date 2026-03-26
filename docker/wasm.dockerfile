@@ -31,11 +31,12 @@ COPY . /vamp
 WORKDIR /vamp
 
 # Configure with Emscripten toolchain
-# Point Eigen3_DIR to the system-installed Eigen3 CMake config
+# CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH allows find_package to locate
+# host-installed Eigen3 despite Emscripten's sysroot-only default
 RUN emcmake cmake -S . -B build-wasm \
     -DCMAKE_BUILD_TYPE=Release \
     -DVAMP_BUILD_PYTHON_BINDINGS=OFF \
-    -DEigen3_DIR=/usr/lib/cmake/eigen3
+    -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH
 
 # Build all WASM targets
 RUN cmake --build build-wasm -j$(nproc)
