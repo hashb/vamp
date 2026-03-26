@@ -3,15 +3,10 @@
 # Build:
 #   docker build -f docker/wasm.dockerfile -t vamp-wasm .
 #
-# Extract build artifacts:
-#   docker run --rm vamp-wasm cat /vamp/build-wasm/vamp_planning.mjs > build-wasm/vamp_planning.mjs
-#   docker run --rm vamp-wasm cat /vamp/build-wasm/vamp_planning.wasm > build-wasm/vamp_planning.wasm
-#   docker run --rm vamp-wasm cat /vamp/build-wasm/vamp_smoke.mjs > build-wasm/vamp_smoke.mjs
-#   docker run --rm vamp-wasm cat /vamp/build-wasm/vamp_smoke.wasm > build-wasm/vamp_smoke.wasm
-#
-# Or copy everything out:
+# Extract build artifacts (note: trailing /. copies contents, not the directory):
+#   mkdir -p build-wasm
 #   docker create --name vamp-wasm-tmp vamp-wasm
-#   docker cp vamp-wasm-tmp:/vamp/build-wasm ./build-wasm
+#   docker cp vamp-wasm-tmp:/vamp/build-wasm/. ./build-wasm
 #   docker rm vamp-wasm-tmp
 #
 # Run smoke test inside container:
