@@ -188,7 +188,7 @@ function setStatus(msg) { statusEl.textContent = msg; }
 async function loadWasm() {
   try {
     setStatus('Loading WASM module...');
-    const mod = await import('../../build-wasm/vamp_planning.mjs');
+    const mod = await import('/build-wasm/vamp_planning.mjs');
     wasmModule = await mod.default();
 
     wasmFns.plan = wasmModule.cwrap('vamp_plan', 'number', []);
@@ -208,7 +208,7 @@ async function loadWasm() {
     btnReset.disabled = false;
     setStatus('Ready. Click "Plan Path" to run RRTC planning.');
   } catch (e) {
-    setStatus('Failed to load WASM: ' + e.message + '. Build with: emcmake cmake -S . -B build-wasm && cmake --build build-wasm -j');
+    setStatus('Failed to load WASM: ' + e.message + '. Copy artifacts from Docker: docker cp vamp-wasm-tmp:/vamp/build-wasm ./build-wasm, then serve from repo root: npx serve .');
     console.error(e);
   }
 }
