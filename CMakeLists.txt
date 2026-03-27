@@ -27,8 +27,6 @@ if(VAMP_FORCE_COLORED_OUTPUT)
   endif()
 endif()
 
-add_definitions(-w)
-
 project(
     vamp
     VERSION 0.2
@@ -77,10 +75,9 @@ if(EMSCRIPTEN)
   target_link_libraries(vamp_wasm_smoke PRIVATE vamp_cpp)
   set_target_properties(vamp_wasm_smoke PROPERTIES OUTPUT_NAME vamp_smoke SUFFIX ".mjs")
   add_executable(vamp_wasm_planning src/impl/vamp/bindings/wasm_planning.cc)
-  # Emscripten flags: ES module, no filesystem, export smoke and cwrap for script
   target_link_options(vamp_wasm_planning PRIVATE
-    "SHELL:-s EXPORTED_FUNCTIONS=['_vamp_wasm_planning']"
-    "SHELL:-s EXPORTED_RUNTIME_METHODS=['cwrap']"
+    "SHELL:-s EXPORTED_FUNCTIONS=['_vamp_wasm_planning','_vamp_plan','_vamp_get_path_data','_vamp_get_path_dof','_vamp_compute_fk','_vamp_get_obstacles','_vamp_get_obstacle_count','_vamp_get_robot_sphere_count']"
+    "SHELL:-s EXPORTED_RUNTIME_METHODS=['cwrap','HEAPF32']"
     "SHELL:-s MODULARIZE=1"
     "SHELL:-s EXPORT_ES6=1"
     "SHELL:-s ENVIRONMENT=web,worker,node"

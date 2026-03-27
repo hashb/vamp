@@ -5,6 +5,7 @@ docker/
 
 
 build/
+build-wasm/
 .cache/
 compile_commands.json
 *.out.*

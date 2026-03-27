@@ -86,13 +86,17 @@ Visualization is enabled by `--visualize`, which shows the plan with the PyBulle
 # Other Scripts
 
 ## Wasm32 smoke test
-If you have [Emscripten](https://emscripten.org) installed and activated (emcc/em++ in PATH), you can build a minimal wasm32 SIMD smoke module and run a quick Node test:
+If you have [Emscripten](https://emscripten.org) installed and activated (emcc/em++ in PATH), you can build the wasm32 SIMD modules and run tests:
 
-1) Configure a separate build directory using Emscripten's toolchain (e.g., `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`).
-2) Build the `vamp_wasm_smoke` target: `cmake --build build-wasm -j`.
-3) Run the Node test: `node scripts/wasm_smoke.js`.
+1) Configure a separate build directory: `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`.
+2) Build all WASM targets: `cmake --build build-wasm -j`.
+3) Run the smoke test: `node scripts/wasm_smoke.js`.
+4) Run the planning test: `node scripts/wasm_planning.js`.
 
-This produces `build-wasm/vamp_smoke.mjs` and exercises the Wasm SIMD paths in the collision and vector code.
+## Three.js Demo
+A browser-based 3D visualization of Panda robot motion planning is available in `demo/threejs/index.html`.
+After building the WASM targets, serve the repo root with any HTTP server (e.g., `npx serve .`) and open
+`demo/threejs/index.html`. The demo runs RRTC planning in WebAssembly and animates the robot path using Three.js.
 
 ## `visualize_ompl.py`
 If you have the [OMPL](https://ompl.kavrakilab.org/) Python Bindings installed (we recommend using the [pre-built wheels](https://github.com/ompl/ompl/releases/tag/prerelease)) you can also test problems against OMPL using PyBullet's collision checking with this script.
