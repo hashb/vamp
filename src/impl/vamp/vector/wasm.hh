@@ -307,7 +307,7 @@ namespace vamp
         template <std::size_t idx>
         inline static constexpr auto broadcast_dispatch(VectorT v) noexcept -> VectorT
         {
-            float lane;
+            float lane = 0.0f;
             if constexpr (idx == 0)
                 lane = wasm_f32x4_extract_lane(v.v, 0);
             else if constexpr (idx == 1)
@@ -509,7 +509,7 @@ namespace vamp
         template <unsigned int = 0>
         inline static constexpr auto hsum(VectorT v) noexcept -> ScalarT
         {
-            float out[4];
+            float out[4] = {};
             wasm_v128_store(out, v.v);
             return out[0] + out[1] + out[2] + out[3];
         }

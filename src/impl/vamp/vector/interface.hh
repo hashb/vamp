@@ -818,7 +818,7 @@ namespace vamp
         using DataT = typename Sig::DataT;
         using RowT = Vector<S, 1, num_scalars_per_row>;
 
-        DataT data{0};
+        DataT data{};
 
         constexpr Vector() noexcept = default;
 
