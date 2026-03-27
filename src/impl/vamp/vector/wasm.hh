@@ -166,7 +166,7 @@ namespace vamp
         template <unsigned int = 0>
         inline static constexpr auto shift_right(VectorT v, unsigned int i) noexcept -> VectorT
         {
-            return VectorT{wasm_i32x4_shr(v.v, static_cast<int>(i))};
+            return VectorT{wasm_u32x4_shr(v.v, static_cast<int>(i))};
         }
 
         template <unsigned int = 0>
@@ -484,7 +484,7 @@ namespace vamp
         template <unsigned int = 0>
         inline static constexpr auto shift_right(VectorT v, unsigned int i) noexcept -> VectorT
         {
-            v128_t vi = wasm_i32x4_shr(v.v, static_cast<int>(i));
+            v128_t vi = wasm_u32x4_shr(v.v, static_cast<int>(i));
             return VectorT{vi};
         }
 
@@ -732,7 +732,7 @@ namespace vamp
         {
             if constexpr (std::is_same_v<OtherVectorT, wasm_i32x4>)
             {
-                // Map [0, UINT_MAX] to [0, 1]
+                // Map signed int32 bit patterns to approximately [-0.5, 0.5]
                 auto v1 = wasm_i32x4_and(v.v, wasm_i32x4_splat(1));
                 auto v1f = wasm_f32x4_convert_i32x4(v1);
                 auto vf = wasm_f32x4_convert_i32x4(v.v);
